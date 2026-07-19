@@ -20,7 +20,7 @@ pretrained/
 output/
 ckpt/
 Real*/
-tests/
+# Keep the Studio test suite; large test fixtures remain ignored below.
 infinite_generate_test.sh
 streaming_output_test.py
 examples/liuwei2.png
@@ -191,6 +191,13 @@ diffusers
 
 tests/data
 
+# LiveAvatarDirector host-mounted runtime state.
+/data/
+/models/
+/cache/
+!frontend/
+!frontend/*.html
+
 wandb
 
 .vscode 
@@ -226,3 +233,7 @@ cogvideox_output
 
 VBench
 *.pt
+
+# Studio UI source is tracked despite upstream's generated-HTML rule.
+!frontend/
+!frontend/*.html

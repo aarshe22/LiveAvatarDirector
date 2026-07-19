@@ -45,6 +45,24 @@
 
 > **TL;DR:** **Live Avatar** is an algorithm–system co-designed framework that enables real-time, streaming, infinite-length interactive avatar video generation. Powered by a **14B-parameter** diffusion model, it achieves **45 FPS** on multi-card **H800** GPUs with **4-step** sampling and supports **Block-wise Autoregressive** processing for **10,000+** second streaming videos.
 
+## LiveAvatarDirector Studio
+
+This fork adds a persistent production studio around the upstream renderer. Projects, uploads, normalized media, jobs, checkpoints, renders, metadata, configuration, and caches live on host-mounted storage. The API process never loads the model; a separate GPU worker owns renderer lifecycle and durable queue execution.
+
+Start the Studio and worker:
+
+```bash
+./scripts/start.sh
+```
+
+Open `http://localhost:8812` (override with `LAD_PORT`). Place the upstream checkpoint at `models/Wan2.2-S2V-14B`, or set `LAD_LIVEAVATAR_CHECKPOINT` in `docker-compose.yaml`. The Studio starts in degraded mode when the checkpoint is absent. The optional upstream Gradio service is available with:
+
+```bash
+docker compose --profile legacy up -d legacy-gradio
+```
+
+Persistent host directories are `data/`, `models/`, and `cache/`. Important environment variables are `LAD_DATA_ROOT`, `LAD_MODELS_ROOT`, `LAD_CACHE_ROOT`, `LAD_LIVEAVATAR_CHECKPOINT`, `LAD_WORKER_POLL_SECONDS`, `LAD_STALE_JOB_SECONDS`, `LAD_LOG_LEVEL`, and `LAD_MOCK_RENDERER` (CI only).
+
 <div align="center">
 
 [![Watch the video](assets/demo.png)](https://www.youtube.com/watch?v=srbsGlLNpAc)

@@ -1,0 +1,49 @@
+name: liveavatar-director
+x-studio: &studio
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.studio
+  image: liveavatar-director:local
+  restart: unless-stopped
+  environment: &environment
+    LAD_DATA_ROOT: /data
+    LAD_MODELS_ROOT: /models
+    LAD_CACHE_ROOT: /cache
+    LAD_LIVEAVATAR_CHECKPOINT: /models/Wan2.2-S2V-14B
+    LAD_MOCK_RENDERER: ${LAD_MOCK_RENDERER:-false}
+  volumes: &volumes
+    - ./data:/data
+    - ./models:/models
+    - ./cache:/cache
+
+services:
+  api:
+    <<: *studio
+    ports:
+      - "${LAD_PORT:-8812}:8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  worker:
+    <<: *studio
+    command: ["python3", "-m", "studio.workers.worker"]
+    gpus: all
+    environment:
+      <<: *environment
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    depends_on:
+      api:
+        condition: service_healthy
+  legacy-gradio:
+    profiles: ["legacy"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.legacy
+    ports:
+      - "7860:7860"
+    volumes: *volumes
+    gpus: all
+    environment: *environment

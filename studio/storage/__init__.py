@@ -1,0 +1,1 @@
+"""Safe persistent storage primitives."""

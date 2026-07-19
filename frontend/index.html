@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiveAvatarDirector</title><link rel="stylesheet" href="/style.css"></head>
+<body><header><div><span class="mark">L</span><strong>LiveAvatarDirector</strong></div><span id="health">Connecting…</span></header>
+<main><aside><button data-view="projects" class="active">Projects</button><button data-view="queue">Queue</button><button data-view="files">Files</button><button data-view="system">Diagnostics</button><a href="http://localhost:7860" target="_blank">Legacy Gradio ↗</a></aside>
+<section><div class="hero"><div><small>DIGITAL HUMAN STUDIO</small><h1 id="title">Projects</h1><p>Persistent, resumable LiveAvatar productions.</p></div><button id="newProject" class="primary">New project</button></div><div id="content" class="grid"></div></section></main>
+<dialog id="createDialog"><form method="dialog"><h2>Create project</h2><label>Name<input id="projectName" required value="Untitled Project"></label><label>Renderer<select id="renderer"></select></label><div class="actions"><button value="cancel">Cancel</button><button id="create" value="default" class="primary">Create</button></div></form></dialog>
+<dialog id="editor"><form method="dialog"><button class="close" value="cancel">×</button><h2 id="editorTitle"></h2><input id="portrait" type="file" accept="image/*"><input id="audio" type="file" accept="audio/*"><label>Prompt<textarea id="prompt" rows="4"></textarea></label><div id="assetState"></div><div class="actions"><button id="save">Save</button><button id="render" class="primary">Start render</button></div></form></dialog>
+<script src="/app.js"></script></body></html>
