@@ -39,5 +39,10 @@ class JobService:
         with self.db.connect() as db: db.execute("UPDATE jobs SET state='cancel_requested',updated_at=? WHERE id=? AND state NOT IN ('completed','failed','cancelled')", (utcnow(), job_id))
         self.db.event("job.cancel_requested", job_id=job_id); return self.get(job_id)
     def retry(self, job_id: str) -> dict:
-        with self.db.connect() as db: db.execute("UPDATE jobs SET state='queued',phase='queued',error=NULL,updated_at=? WHERE id=? AND state IN ('failed','cancelled','paused')", (utcnow(), job_id))
+        now = utcnow()
+        with self.db.connect() as db:
+            changed = db.execute("UPDATE jobs SET state='queued',phase='queued',error=NULL,progress=0,current_clip=0,updated_at=? WHERE id=? AND state IN ('failed','cancelled','paused')", (now, job_id)).rowcount
+            if changed:
+                job = db.execute("SELECT project_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+                db.execute("UPDATE projects SET status='rendering',active_job_id=?,updated_at=? WHERE id=?", (job_id, now, job["project_id"]))
         self.db.event("job.retried", job_id=job_id); return self.get(job_id)

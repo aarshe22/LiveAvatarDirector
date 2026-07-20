@@ -24,16 +24,19 @@ class LiveAvatarRenderer(RendererBackend):
             {"name": "sample_steps", "label": "Diffusion steps", "type": "range", "min": 1, "max": 20, "step": 1, "default": 4, "help": "More denoising passes may improve detail but increase render time almost linearly."},
             {"name": "guidance", "label": "Prompt guidance", "type": "range", "min": 0, "max": 10, "step": 0.1, "default": 0, "help": "Controls how strongly motion and appearance follow the text prompt."},
             {"name": "sample_shift", "label": "Sampling shift", "type": "range", "min": 0, "max": 10, "step": 0.1, "default": 3, "help": "Biases the diffusion timestep schedule between global structure and fine detail."},
-            {"name": "size", "label": "Output size", "type": "select", "options": ["704x384", "512x288"], "default": "704x384", "help": "Sets output resolution and directly affects memory use and render speed."},
+            {"name": "size", "label": "Output size", "type": "select", "options": ["704x384", "688x368", "720x400", "384x256"], "default": "704x384", "help": "Sets an upstream-supported output resolution and directly affects memory use and render speed."},
             {"name": "fp8", "label": "FP8 inference", "type": "boolean", "default": True, "help": "Uses lower-precision model weights to reduce memory use and improve throughput."},
             {"name": "offload_model", "label": "CPU model offload", "type": "boolean", "default": False, "help": "Moves inactive model components to system RAM, saving VRAM at a speed cost."},
         )
         return RendererCapabilities(name="liveavatar", display_name="LiveAvatar (Wan2.2 S2V 14B)", effective_fps=25.0,
+                                    supported_sizes=("704x384", "688x368", "720x400", "384x256"),
                                     supported_frames_per_clip=(48,), generation_parameters=parameters)
     def validate(self, context: RenderContext) -> list[str]:
         errors = []
         if not self.checkpoint.is_dir(): errors.append(f"checkpoint missing: {self.checkpoint}")
         if not (self.lora / "liveavatar.safetensors").is_file(): errors.append(f"LiveAvatar LoRA missing: {self.lora}")
+        size = context.settings.get("size", "704x384").replace("*", "x")
+        if size not in self.capabilities().supported_sizes: errors.append(f"unsupported LiveAvatar size: {size}")
         return errors
     def render(self, context: RenderContext, progress) -> None:
         settings = context.settings

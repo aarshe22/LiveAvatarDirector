@@ -92,6 +92,19 @@ def test_job_submission_is_idempotent(services):
     assert first["id"] == second["id"]
 
 
+def test_retry_restores_project_active_job_state(services):
+    _, db, service = services; project = service.create("Retry", renderer="mock")
+    service.add_asset(project["id"], "portrait", "face.png", io.BytesIO(b"image"), "image/png")
+    service.add_asset(project["id"], "audio", "voice.wav", io.BytesIO(b"audio"), "audio/wav")
+    jobs = JobService(db); job = jobs.create(service.get(project["id"]), {})
+    with db.connect() as connection:
+        connection.execute("UPDATE jobs SET state='failed',phase='failed' WHERE id=?", (job["id"],))
+        connection.execute("UPDATE projects SET status='failed',active_job_id=NULL WHERE id=?", (project["id"],))
+    assert jobs.retry(job["id"])["state"] == "queued"
+    retried_project = service.get(project["id"])
+    assert retried_project["status"] == "rendering" and retried_project["active_job_id"] == job["id"]
+
+
 def test_history_discovers_untracked_exports(services, tmp_path):
     settings, db, _ = services
     exports = tmp_path / "exports"; exports.mkdir(); video = exports / "archived render.mp4"; video.write_bytes(b"video")
