@@ -17,6 +17,7 @@ from studio import __version__
 from studio.core.config import Settings
 from studio.db.database import Database, row_dict
 from studio.jobs.service import JobService
+from studio.history.service import HistoryService
 from studio.projects.service import ProjectService
 from studio.renderers import registry
 from studio.storage.atomic import contained
@@ -24,6 +25,7 @@ from studio.storage.atomic import atomic_json
 from studio.media.audio import clip_plan, probe
 
 settings = Settings.load(); db = Database(settings.database_path); projects = ProjectService(db, settings.data_root); jobs = JobService(db)
+exports_root = Path(os.getenv("LAD_EXPORTS_ROOT", "/exports")).resolve(); history = HistoryService(db, settings.data_root, exports_root)
 
 
 @asynccontextmanager
@@ -154,6 +156,18 @@ def project_renders(project_id: str):
 
 @app.get("/api/jobs")
 def list_jobs(): return jobs.list()
+
+
+@app.get("/api/history")
+def render_history(): return history.list()
+
+
+@app.get("/api/history/download")
+def download_history(path: str):
+    try: target = contained(exports_root, exports_root / path)
+    except ValueError as error: fail(error)
+    if not target.is_file(): raise HTTPException(404, "export not found")
+    return FileResponse(target, filename=target.name, media_type="video/mp4")
 
 
 @app.get("/api/jobs/{job_id}")

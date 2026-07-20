@@ -9,6 +9,7 @@ x-studio: &studio
     LAD_DATA_ROOT: /data
     LAD_MODELS_ROOT: /models
     LAD_CACHE_ROOT: /cache
+    LAD_EXPORTS_ROOT: /exports
     LAD_LIVEAVATAR_CHECKPOINT: /models/Wan2.2-S2V-14B
     LAD_LIVEAVATAR_LORA: /models/LiveAvatar
     LAD_MOCK_RENDERER: ${LAD_MOCK_RENDERER:-false}
@@ -17,6 +18,7 @@ x-studio: &studio
     - ./data:/data
     - ./models:/models
     - ./cache:/cache
+    - ./exports:/exports
 
 services:
   api:

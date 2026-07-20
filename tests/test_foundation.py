@@ -10,6 +10,7 @@ from PIL import Image
 from studio.core.config import Settings
 from studio.db.database import Database
 from studio.jobs.service import JobService
+from studio.history.service import HistoryService
 from studio.media.audio import clip_plan
 from studio.media.image import normalize_portrait
 from studio.projects.service import ProjectService
@@ -65,3 +66,12 @@ def test_job_submission_is_idempotent(services):
     service.add_asset(project["id"], "audio", "voice.wav", io.BytesIO(b"audio"), "audio/wav")
     jobs = JobService(db); first = jobs.create(service.get(project["id"]), {}); second = jobs.create(service.get(project["id"]), {})
     assert first["id"] == second["id"]
+
+
+def test_history_discovers_untracked_exports(services, tmp_path):
+    settings, db, _ = services
+    exports = tmp_path / "exports"; exports.mkdir(); video = exports / "archived render.mp4"; video.write_bytes(b"video")
+    history = HistoryService(db, settings.data_root, exports).list()
+    assert history[0]["source"] == "exports"
+    assert history[0]["filename"] == "archived render.mp4"
+    assert history[0]["download_url"].endswith("archived%20render.mp4")
