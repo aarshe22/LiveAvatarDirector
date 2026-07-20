@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -23,6 +23,7 @@ class RendererCapabilities:
     incremental_decode: bool = False
     generation_resume: bool = False
     recovery_level: int = 0
+    generation_parameters: tuple[dict, ...] = field(default_factory=tuple)
 
     def dict(self): return asdict(self)
 

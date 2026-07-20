@@ -7,14 +7,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS projects(
  id TEXT PRIMARY KEY, name TEXT NOT NULL, mode TEXT NOT NULL, status TEXT NOT NULL,
  renderer TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
- portrait_asset_id TEXT, audio_asset_id TEXT, prompt TEXT NOT NULL DEFAULT '',
+ portrait_asset_id TEXT, audio_asset_id TEXT, style_asset_id TEXT, prompt TEXT NOT NULL DEFAULT '',
  negative_prompt TEXT NOT NULL DEFAULT '', performance_preset TEXT NOT NULL,
  renderer_settings TEXT NOT NULL DEFAULT '{}', active_job_id TEXT, latest_render_id TEXT
 );
@@ -67,6 +67,8 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             db.executescript(SCHEMA)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(projects)").fetchall()}
+            if "style_asset_id" not in columns: db.execute("ALTER TABLE projects ADD COLUMN style_asset_id TEXT")
             db.execute("INSERT OR IGNORE INTO schema_migrations VALUES (?, ?)", (SCHEMA_VERSION, utcnow()))
 
     @contextmanager

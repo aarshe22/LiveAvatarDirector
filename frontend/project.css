@@ -2,3 +2,12 @@
 .preview-panel { overflow: hidden; border: 1px solid #343a4a; border-radius: 12px; background: #090b10; }
 .preview-panel img { display: block; width: 100%; height: auto; }
 .analysis-state { min-height: 18px; color: #8b93a7; font-size: 13px; }
+.renderer-settings { width: auto; max-width: none; margin: 0; padding: 16px; border: 1px solid #343a4a; border-radius: 12px; }
+.settings-heading { display: flex; align-items: center; justify-content: space-between; }
+.settings-heading h3 { margin: 0; }
+.settings-heading button { padding: 7px 10px; border: 1px solid #343a4a; border-radius: 7px; }
+#rendererControls { display: grid; gap: 16px; margin-top: 16px; }
+.parameter small { color: #737b8f; line-height: 1.4; }
+.range-row { display: grid; grid-template-columns: 1fr 64px; gap: 12px; align-items: center; }
+.range-row output { text-align: right; color: #67e8f9; font-variant-numeric: tabular-nums; }
+.parameter input[type="checkbox"] { width: 22px; height: 22px; }

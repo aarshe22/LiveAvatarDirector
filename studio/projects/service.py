@@ -59,14 +59,14 @@ class ProjectService:
         return project
 
     def add_asset(self, project_id: str, kind: str, filename: str, stream: BinaryIO, mime_type: str | None = None) -> dict:
-        if kind not in {"portrait", "audio"}: raise ValueError("asset kind must be portrait or audio")
+        if kind not in {"portrait", "audio", "style"}: raise ValueError("asset kind must be portrait, style, or audio")
         self.get(project_id)
         safe = SAFE_NAME.sub("_", Path(filename).name).strip("._") or f"upload-{uuid.uuid4().hex}"
         asset_id = str(uuid.uuid4())
         relative = Path("projects") / project_id / "assets" / "original" / f"{asset_id}-{safe}"
         digest, size = persist_stream(stream, self.data_root / relative)
         guessed = mime_type or mimetypes.guess_type(safe)[0] or "application/octet-stream"
-        allowed = guessed.startswith("image/") if kind == "portrait" else guessed.startswith("audio/") or guessed in {"video/mp4", "application/octet-stream"}
+        allowed = guessed.startswith("image/") if kind in {"portrait", "style"} else guessed.startswith("audio/") or guessed in {"video/mp4", "application/octet-stream"}
         if not allowed:
             (self.data_root / relative).unlink(missing_ok=True); raise ValueError(f"unsupported {kind} MIME type: {guessed}")
         now = utcnow()
@@ -74,7 +74,7 @@ class ProjectService:
             with self.db.connect() as db:
                 db.execute("INSERT INTO assets VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                            (asset_id, project_id, kind, "original", filename, str(relative), guessed, size, digest, "{}", now))
-                column = "portrait_asset_id" if kind == "portrait" else "audio_asset_id"
+                column = {"portrait": "portrait_asset_id", "style": "style_asset_id", "audio": "audio_asset_id"}[kind]
                 db.execute(f"UPDATE projects SET {column}=?, updated_at=? WHERE id=?", (asset_id, now, project_id))
         except Exception:
             (self.data_root / relative).unlink(missing_ok=True); raise

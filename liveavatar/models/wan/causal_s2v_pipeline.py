@@ -1140,6 +1140,7 @@ class WanS2V:
                         torch.cuda.empty_cache()
                 else:
                     clip_outputs.append(clip_output.detach().cpu())
+                print(f"LAD_PROGRESS stage=diffusion completed={r + 1} total={active_nr}", flush=True)
 
         #-------------------------------------- Step 3: full-video postprocess (deferred VAE decode for r>=1)--------------------------------------
         print(f"complete full-sequence generation")
@@ -1184,6 +1185,7 @@ class WanS2V:
                     self.vae.encode(videos_last_frames)
                 ).type_as(clip_output)
                 out.append(image.cpu())
+                print(f"LAD_PROGRESS stage=decoding completed={clip_idx + 1} total={len(clip_outputs)}", flush=True)
 
         videos = torch.cat(out, dim=2)
         del clip_noise, clip_latents, clip_output, block_latents

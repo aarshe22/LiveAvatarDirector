@@ -89,7 +89,7 @@ def get_project(project_id: str):
         project = projects.get(project_id)
         analysis_path = settings.data_root / "projects" / project_id / "analysis" / "latest.json"
         analysis = json.loads(analysis_path.read_text()) if analysis_path.is_file() else None
-        if analysis and analysis.get("input_asset_ids") != {"portrait": project["portrait_asset_id"], "audio": project["audio_asset_id"]}:
+        if analysis and analysis.get("input_asset_ids") != {"portrait": project["portrait_asset_id"], "style": project.get("style_asset_id"), "audio": project["audio_asset_id"]}:
             analysis = None
         return {**project, "assets": projects.assets(project_id), "analysis": analysis}
     except Exception as error: fail(error)
@@ -137,21 +137,35 @@ def upload_audio(project_id: str, file: UploadFile = File(...)):
     except Exception as error: fail(error)
 
 
+@app.post("/api/projects/{project_id}/style", status_code=201)
+def upload_style(project_id: str, file: UploadFile = File(...)):
+    try: return projects.add_asset(project_id, "style", file.filename or "style-reference", file.file, file.content_type)
+    except Exception as error: fail(error)
+
+
 @app.post("/api/projects/{project_id}/analyze")
-def analyze_project(project_id: str, frames_per_clip: int = 48):
+def analyze_project(project_id: str, frames_per_clip: int | None = None):
     try:
         project = projects.get(project_id)
         if not project["portrait_asset_id"]: raise ValueError("portrait is required")
         if not project["audio_asset_id"]: raise ValueError("audio is required")
         portrait = projects.asset(project["portrait_asset_id"]); audio = projects.asset(project["audio_asset_id"])
+        style = projects.asset(project["style_asset_id"]) if project.get("style_asset_id") else None
         renderer = registry.get(project["renderer"]); capabilities = renderer.capabilities()
         size_text = project["renderer_settings"].get("size", capabilities.supported_sizes[0]).replace("*", "x")
         width, height = map(int, size_text.split("x")); mode = project["renderer_settings"].get("normalization_mode", "smart_blur")
-        preview = settings.data_root / "projects" / project_id / "assets" / "normalized" / f"portrait-{portrait['sha256'][:12]}-{width}x{height}.png"
-        portrait_info = normalize_portrait(settings.data_root / portrait["relative_path"], preview, (width, height), mode)
-        information = probe(settings.data_root / audio["relative_path"]); plan = clip_plan(information["duration"], frames_per_clip, capabilities.effective_fps)
+        style_suffix = f"-style-{style['sha256'][:12]}" if style else ""
+        preview = settings.data_root / "projects" / project_id / "assets" / "normalized" / f"portrait-{portrait['sha256'][:12]}{style_suffix}-{width}x{height}.png"
+        style_path = settings.data_root / style["relative_path"] if style else None
+        portrait_info = normalize_portrait(settings.data_root / portrait["relative_path"], preview, (width, height), mode, background_source=style_path)
+        selected_frames = frames_per_clip or int(project["renderer_settings"].get("frames_per_clip", 48))
+        information = probe(settings.data_root / audio["relative_path"])
+        requested_duration = float(project["renderer_settings"].get("duration_seconds") or information["duration"])
+        if requested_duration <= 0: raise ValueError("render duration must be positive")
+        plan = clip_plan(min(requested_duration, information["duration"]), selected_frames, capabilities.effective_fps)
+        plan["source_audio_duration"] = information["duration"]
         result = {**information, "render_plan": plan, "portrait": portrait_info,
-                  "input_asset_ids": {"portrait": portrait["id"], "audio": audio["id"]},
+                  "input_asset_ids": {"portrait": portrait["id"], "style": style["id"] if style else None, "audio": audio["id"]},
                   "preview_url": f"/api/files/download?path={preview.relative_to(settings.data_root)}"}
         analysis_root = settings.data_root / "projects" / project_id / "analysis"
         atomic_json(analysis_root / f"audio-{audio['sha256'][:12]}.json", result); atomic_json(analysis_root / "latest.json", result)

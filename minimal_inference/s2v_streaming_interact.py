@@ -570,6 +570,7 @@ def generate(args, training_settings):
             os.makedirs(args.save_dir, exist_ok=True)
             args.save_file = args.save_dir + args.save_file + suffix
         logging.info(f"Saving generated video to {args.save_file}")
+        print("LAD_PROGRESS stage=encoding completed=0 total=1", flush=True)
         save_video(
             tensor=video[None],
             save_file=args.save_file,
@@ -577,11 +578,14 @@ def generate(args, training_settings):
             nrow=1,
             normalize=True,
             value_range=(-1, 1))
+        print("LAD_PROGRESS stage=encoding completed=1 total=1", flush=True)
         if "s2v" in args.task:
+            print("LAD_PROGRESS stage=muxing completed=0 total=1", flush=True)
             if args.enable_tts is False:
                 merge_video_audio(video_path=args.save_file, audio_path=args.audio)
             else:
                 merge_video_audio(video_path=args.save_file, audio_path="tts.wav")
+            print("LAD_PROGRESS stage=muxing completed=1 total=1", flush=True)
     del video
 
     torch.cuda.synchronize()

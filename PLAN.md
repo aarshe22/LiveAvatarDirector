@@ -1033,6 +1033,10 @@ Implemented and exercised on the host GPU deployment:
 - project, queue, history, file inventory, and diagnostics UI sections,
 - database-backed render history plus discovery and download of untracked files in `/exports`,
 - normalized portrait preview and pre-render audio/clip analysis in the project editor,
+- optional persisted style/background reference composited into the renderer conditioning portrait,
+- deterministic LiveAvatar controls with documented seeded defaults and reset support,
+- editable target duration with durable leading-audio trim for short test renders,
+- measured diffusion and VAE-decode clip meters with stage-specific ETA reporting,
 - validated long-form LiveAvatar render at 704x384 and 25 FPS.
 
 The next foundation work is Phase 8 file and cache management. The current screens are read-only inventories; safe file actions, reference protection, cache cleanup, archive/export/import, and restore remain unimplemented. Incremental renderer-state recovery remains Level 0 because upstream LiveAvatar still performs monolithic generation and final decode.

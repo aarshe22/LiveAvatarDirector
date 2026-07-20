@@ -13,7 +13,7 @@ class JobService:
     def __init__(self, db: Database): self.db = db
     def create(self, project: dict, settings: dict) -> dict:
         if not project["portrait_asset_id"] or not project["audio_asset_id"]: raise ValueError("portrait and audio are required")
-        canonical = json.dumps({"portrait": project["portrait_asset_id"], "audio": project["audio_asset_id"], "renderer": project["renderer"], "prompt": project["prompt"], "settings": settings}, sort_keys=True)
+        canonical = json.dumps({"portrait": project["portrait_asset_id"], "style": project.get("style_asset_id"), "audio": project["audio_asset_id"], "renderer": project["renderer"], "prompt": project["prompt"], "settings": settings}, sort_keys=True)
         key = hashlib.sha256(canonical.encode()).hexdigest(); now = utcnow(); job_id = str(uuid.uuid4())
         with self.db.connect() as db:
             existing = db.execute("SELECT * FROM jobs WHERE project_id=? AND idempotency_key=?", (project["id"], key)).fetchone()

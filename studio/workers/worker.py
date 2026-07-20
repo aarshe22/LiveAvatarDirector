@@ -11,7 +11,7 @@ from pathlib import Path
 
 from studio.core.config import Settings
 from studio.db.database import Database, row_dict, utcnow
-from studio.media.audio import clip_plan, normalize_audio, probe
+from studio.media.audio import clip_plan, normalize_audio, probe, trim_audio
 from studio.media.image import normalize_portrait
 from studio.projects.service import project_layout
 from studio.renderers import registry
@@ -76,6 +76,7 @@ class Worker:
             project = row_dict(db.execute("SELECT * FROM projects WHERE id=?", (job["project_id"],)).fetchone())
             portrait = row_dict(db.execute("SELECT * FROM assets WHERE id=?", (project["portrait_asset_id"],)).fetchone())
             audio = row_dict(db.execute("SELECT * FROM assets WHERE id=?", (project["audio_asset_id"],)).fetchone())
+            style = row_dict(db.execute("SELECT * FROM assets WHERE id=?", (project["style_asset_id"],)).fetchone()) if project.get("style_asset_id") else None
             existing_output = row_dict(db.execute("SELECT * FROM outputs WHERE job_id=?", (job["id"],)).fetchone())
         if existing_output:
             existing_path = self.settings.data_root / existing_output["relative_path"]
@@ -88,21 +89,32 @@ class Worker:
                 return
         backend = registry.get(job["renderer"]); settings = {**project["renderer_settings"], **job["settings"]}
         size_text = settings.get("size", "704x384").replace("*", "x"); width, height = map(int, size_text.split("x"))
-        normalized_portrait = base / "assets" / "normalized" / f"portrait-{portrait['sha256'][:12]}-{width}x{height}.png"
+        style_suffix = f"-style-{style['sha256'][:12]}" if style else ""
+        normalized_portrait = base / "assets" / "normalized" / f"portrait-{portrait['sha256'][:12]}{style_suffix}-{width}x{height}.png"
         normalized_audio = base / "assets" / "normalized" / f"audio-{audio['sha256'][:12]}.wav"
         self.transition(job, "preprocessing", .05)
-        if not normalized_portrait.exists(): normalize_portrait(self.settings.data_root / portrait["relative_path"], normalized_portrait, (width, height), settings.get("normalization_mode", "smart_blur"))
+        style_path = self.settings.data_root / style["relative_path"] if style else None
+        if not normalized_portrait.exists(): normalize_portrait(self.settings.data_root / portrait["relative_path"], normalized_portrait, (width, height), settings.get("normalization_mode", "smart_blur"), background_source=style_path)
         self.checkpoint(job, "portrait_normalized", normalized_portrait, {})
         if not normalized_audio.exists(): normalize_audio(self.settings.data_root / audio["relative_path"], normalized_audio)
         self.checkpoint(job, "audio_normalized", normalized_audio, {})
         self.transition(job, "analyzing", .15); audio_info = probe(normalized_audio)
         analysis_path = base / "analysis" / f"audio-{audio['sha256'][:12]}.json"; atomic_json(analysis_path, audio_info); self.checkpoint(job, "audio_analysis", analysis_path, {})
         self.transition(job, "planning", .2)
-        capabilities = backend.capabilities(); plan = clip_plan(audio_info["duration"], int(settings.get("frames_per_clip", 48)), capabilities.effective_fps)
+        requested_duration = float(settings.get("duration_seconds") or audio_info["duration"])
+        if requested_duration <= 0: raise ValueError("render duration must be positive")
+        target_duration = min(requested_duration, audio_info["duration"])
+        capabilities = backend.capabilities(); plan = clip_plan(target_duration, int(settings.get("frames_per_clip", 48)), capabilities.effective_fps)
+        plan["source_audio_duration"] = audio_info["duration"]
         settings.update(plan); plan_path = base / "jobs" / job["id"] / "render-plan.json"; atomic_json(plan_path, settings); self.checkpoint(job, "render_plan", plan_path, {})
         with self.db.connect() as db: db.execute("UPDATE jobs SET settings=?,total_clips=? WHERE id=?", (json.dumps(settings), plan["number_of_clips"], job["id"]))
         output = base / "renders" / f"{job['id']}.mp4"
-        context = RenderContext(project["id"], job["id"], normalized_portrait, normalized_audio, output, base / "work", project["prompt"], settings)
+        render_audio = normalized_audio
+        if target_duration < audio_info["duration"] - 0.001:
+            render_audio = base / "assets" / "normalized" / f"audio-{audio['sha256'][:12]}-{target_duration:.3f}s.wav"
+            if not render_audio.exists(): trim_audio(normalized_audio, render_audio, target_duration)
+            self.checkpoint(job, "audio_trimmed", render_audio, {"duration": target_duration})
+        context = RenderContext(project["id"], job["id"], normalized_portrait, render_audio, output, base / "work", project["prompt"], settings)
         errors = backend.validate(context)
         if errors: raise RuntimeError("; ".join(errors))
         self.transition(job, "loading_renderer", .25); backend.prepare(context)

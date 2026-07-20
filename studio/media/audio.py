@@ -24,6 +24,15 @@ def normalize_audio(source: Path, target: Path) -> dict:
     return info
 
 
+def trim_audio(source: Path, target: Path, duration: float) -> dict:
+    if duration <= 0: raise ValueError("duration must be positive")
+    target.parent.mkdir(parents=True, exist_ok=True); temporary = target.with_suffix(".part.wav")
+    subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(source), "-t", f"{duration:.6f}",
+                    "-c:a", "pcm_s16le", str(temporary)], check=True)
+    temporary.replace(target); info = probe(target); info["output_hash"] = sha256_file(target)
+    return info
+
+
 def clip_plan(duration: float, frames_per_clip: int, fps: float) -> dict:
     if duration <= 0 or frames_per_clip <= 0 or fps <= 0: raise ValueError("duration, frames, and fps must be positive")
     clip_duration = frames_per_clip / fps
