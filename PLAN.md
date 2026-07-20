@@ -132,19 +132,19 @@ Every long-running operation must expose:
 
 No important operation should be a black box.
 
-### 3.4.1 Known LiveAvatar Progress Gap
+### 3.4.1 LiveAvatar Progress Integration
 
-The current upstream LiveAvatar generation call is monolithic and does not expose a per-clip callback to the Studio worker. During a real render, GPU computation may be healthy while the persisted UI remains at `Clip 0 / N` and the job heartbeat appears stale until the renderer call returns.
+The upstream LiveAvatar generation call is monolithic and does not expose a supported per-clip callback. The Studio integration therefore streams renderer output, records model-loading/generation/decode stages and completed diffusion blocks, and refreshes the worker heartbeat during silent stages such as final VAE decode.
 
-This must be treated as an observability limitation, not as evidence that the render has stopped. A follow-up integration must capture upstream clip/block progress and periodically persist:
+The integration persists:
 
 - heartbeat timestamp,
 - completed clip or block count,
 - current generation stage,
 - measured throughput,
-- estimated remaining time.
+- estimated remaining time where the upstream output provides enough information.
 
-Until that integration exists, the UI must label clip progress as unavailable during monolithic generation rather than displaying a misleading zero count. Worker liveness and GPU-process diagnostics should be shown separately from renderer progress.
+Clip progress remains explicitly unavailable because diffusion blocks do not map reliably to final clips. The UI must not present block count as clip count or infer a false completion percentage. Worker liveness remains separate from renderer progress.
 
 ### 3.5 Deterministic
 

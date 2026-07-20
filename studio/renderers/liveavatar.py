@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import queue
 import subprocess
+import threading
 from pathlib import Path
 
 from studio.renderers.base import RenderContext, RendererBackend, RendererCapabilities
@@ -40,7 +42,17 @@ class LiveAvatarRenderer(RendererBackend):
                                    text=True, bufsize=1)
         blocks = 0
         assert process.stdout is not None
-        for line in process.stdout:
+        output: queue.Queue[str | None] = queue.Queue()
+        def read_output():
+            for value in process.stdout: output.put(value)
+            output.put(None)
+        threading.Thread(target=read_output, daemon=True).start()
+        while True:
+            try: line = output.get(timeout=5)
+            except queue.Empty:
+                progress(None, None)
+                continue
+            if line is None: break
             print(line, end="", flush=True)
             activity = None
             if "Creating WanS2V pipeline" in line: activity = {"stage": "loading_model", "message": "Loading model"}
