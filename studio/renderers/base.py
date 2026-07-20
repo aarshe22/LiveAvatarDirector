@@ -48,6 +48,6 @@ class RendererBackend(ABC):
     def estimate(self, settings: dict) -> dict: return {"estimate_available": False}
     def prepare(self, context: RenderContext) -> None: context.work_dir.mkdir(parents=True, exist_ok=True)
     @abstractmethod
-    def render(self, context: RenderContext, progress: Callable[[float, int], None]) -> None: ...
+    def render(self, context: RenderContext, progress: Callable[..., None]) -> None: ...
     def cancel(self, context: RenderContext) -> None: return None
     def diagnostics(self) -> dict: return {"available": self.is_available(), "capabilities": self.capabilities().dict()}

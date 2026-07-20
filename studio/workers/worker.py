@@ -107,8 +107,16 @@ class Worker:
         if errors: raise RuntimeError("; ".join(errors))
         self.transition(job, "loading_renderer", .25); backend.prepare(context)
         self.transition(job, "generating", .3)
-        def progress(value, clip):
-            with self.db.connect() as db: db.execute("UPDATE jobs SET progress=?,current_clip=?,heartbeat_at=?,updated_at=? WHERE id=?", (.3 + .55 * value, clip, utcnow(), utcnow(), job["id"]))
+        last_activity_event = [0.0]
+        def progress(value, clip, activity=None):
+            now = utcnow(); updates = {"heartbeat_at": now, "updated_at": now}
+            if value is not None: updates["progress"] = .3 + .55 * value
+            if clip is not None: updates["current_clip"] = clip
+            with self.db.connect() as db:
+                db.execute(f"UPDATE jobs SET {','.join(k+'=?' for k in updates)} WHERE id=?", (*updates.values(), job["id"]))
+            monotonic = time.monotonic()
+            if activity and (monotonic - last_activity_event[0] >= 2 or activity.get("stage") != "generating"):
+                self.db.event("job.renderer_activity", job["project_id"], job["id"], activity); last_activity_event[0] = monotonic
         backend.render(context, progress)
         self.transition(job, "validating_output", .9)
         info = self._probe_output(output); output_hash = sha256_file(output); output_id = str(uuid.uuid4())

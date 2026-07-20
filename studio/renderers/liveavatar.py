@@ -35,6 +35,23 @@ class LiveAvatarRenderer(RendererBackend):
                    "--convert_model_dtype", "--num_gpus_dit", "1", "--single_gpu"]
         if settings.get("fp8", True): command.append("--fp8")
         if settings.get("offload_model"): command.extend(["--offload_model", "true"])
-        progress(0.05, 0)
-        subprocess.run(command, cwd=self.repository, check=True)
+        progress(0.05, 0, {"stage": "launching", "message": "Starting LiveAvatar"})
+        process = subprocess.Popen(command, cwd=self.repository, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, bufsize=1)
+        blocks = 0
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            activity = None
+            if "Creating WanS2V pipeline" in line: activity = {"stage": "loading_model", "message": "Loading model"}
+            elif "Loading checkpoint shards" in line: activity = {"stage": "loading_checkpoint", "message": "Loading checkpoint shards"}
+            elif "LoRA merged successfully" in line: activity = {"stage": "loading_lora", "message": "LoRA loaded"}
+            elif "Generating video" in line: activity = {"stage": "generating", "message": "Generating diffusion blocks"}
+            elif "100%" in line and "4/4" in line:
+                blocks += 1; activity = {"stage": "generating", "message": "Generating diffusion blocks", "units_completed": blocks, "unit_name": "diffusion blocks"}
+            elif "complete full-sequence generation" in line: activity = {"stage": "decoding", "message": "Generation complete; decoding video", "units_completed": blocks, "unit_name": "diffusion blocks"}
+            elif "final decode" in line: activity = {"stage": "decoding", "message": "Final VAE decode", "units_completed": blocks, "unit_name": "diffusion blocks"}
+            if activity: progress(None, None, activity)
+        return_code = process.wait()
+        if return_code: raise subprocess.CalledProcessError(return_code, command)
         context.output.with_suffix(".part.mp4").replace(context.output); progress(1, settings["number_of_clips"])

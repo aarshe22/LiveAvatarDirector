@@ -29,7 +29,12 @@ class JobService:
         return row_dict(row)
     def list(self) -> list[dict]:
         with self.db.connect() as db: rows = db.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
-        return [row_dict(r) for r in rows]
+        result = [row_dict(r) for r in rows]
+        with self.db.connect() as db:
+            for job in result:
+                event = db.execute("SELECT payload,created_at FROM events WHERE job_id=? AND type='job.renderer_activity' ORDER BY id DESC LIMIT 1", (job["id"],)).fetchone()
+                if event: job["renderer_activity"] = {**json.loads(event["payload"]), "reported_at": event["created_at"]}
+        return result
     def cancel(self, job_id: str) -> dict:
         with self.db.connect() as db: db.execute("UPDATE jobs SET state='cancel_requested',updated_at=? WHERE id=? AND state NOT IN ('completed','failed','cancelled')", (utcnow(), job_id))
         self.db.event("job.cancel_requested", job_id=job_id); return self.get(job_id)

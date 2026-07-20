@@ -18,6 +18,7 @@ __pycache__/
 timing_logs/
 pretrained/
 output/
+exports/
 ckpt/
 Real*/
 # Keep the Studio test suite; large test fixtures remain ignored below.
