@@ -61,7 +61,7 @@ Open `http://localhost:8812` (override with `LAD_PORT`). Place the upstream chec
 docker compose --profile legacy up -d legacy-gradio
 ```
 
-Persistent host directories are `data/`, `models/`, and `cache/`. Important environment variables are `LAD_DATA_ROOT`, `LAD_MODELS_ROOT`, `LAD_CACHE_ROOT`, `LAD_LIVEAVATAR_CHECKPOINT`, `LAD_WORKER_POLL_SECONDS`, `LAD_STALE_JOB_SECONDS`, `LAD_LOG_LEVEL`, and `LAD_MOCK_RENDERER` (CI only).
+Persistent host directories are `data/`, `models/`, and `cache/`. Important environment variables are `LAD_DATA_ROOT`, `LAD_MODELS_ROOT`, `LAD_CACHE_ROOT`, `LAD_LIVEAVATAR_CHECKPOINT`, `LAD_LIVEAVATAR_LORA`, `LAD_WORKER_POLL_SECONDS`, `LAD_STALE_JOB_SECONDS`, `LAD_LOG_LEVEL`, and `LAD_MOCK_RENDERER` (CI only).
 
 <div align="center">
 

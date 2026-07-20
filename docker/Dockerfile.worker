@@ -1,0 +1,16 @@
+ARG LIVEAVATAR_RUNTIME_IMAGE=liveavatar:local
+FROM ${LIVEAVATAR_RUNTIME_IMAGE}
+
+ENTRYPOINT []
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=/cache/huggingface TORCH_HOME=/cache/torch CUDA_CACHE_PATH=/cache/cuda
+
+WORKDIR /app
+COPY requirements-studio.txt ./
+RUN python -m pip install --no-cache-dir -r requirements-studio.txt && \
+    python -m pip install --no-cache-dir --force-reinstall --no-deps \
+      torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+COPY . .
+
+CMD ["python", "-m", "studio.workers.worker"]

@@ -10,7 +10,9 @@ x-studio: &studio
     LAD_MODELS_ROOT: /models
     LAD_CACHE_ROOT: /cache
     LAD_LIVEAVATAR_CHECKPOINT: /models/Wan2.2-S2V-14B
+    LAD_LIVEAVATAR_LORA: /models/LiveAvatar
     LAD_MOCK_RENDERER: ${LAD_MOCK_RENDERER:-false}
+    ENABLE_COMPILE: ${ENABLE_COMPILE:-true}
   volumes: &volumes
     - ./data:/data
     - ./models:/models
@@ -28,7 +30,13 @@ services:
       retries: 12
   worker:
     <<: *studio
-    command: ["python3", "-m", "studio.workers.worker"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+      args:
+        LIVEAVATAR_RUNTIME_IMAGE: ${LIVEAVATAR_RUNTIME_IMAGE:-liveavatar:local}
+    image: liveavatar-director-worker:local
+    command: ["python", "-m", "studio.workers.worker"]
     gpus: all
     environment:
       <<: *environment

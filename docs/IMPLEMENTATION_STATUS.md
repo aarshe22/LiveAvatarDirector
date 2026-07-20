@@ -13,6 +13,7 @@
 - Validated MP4 output with audio/video stream checks and deterministic metadata.
 - REST API, reconnecting web UI, file inventory/download, cache inventory, settings, diagnostics, and legacy Gradio link.
 - Docker Compose API/worker separation with persistent mounts and GPU assignment.
+- GPU worker layers the Studio onto the existing `liveavatar:local` inference runtime; override `LIVEAVATAR_RUNTIME_IMAGE` when using another validated upstream image.
 
 ## Honest recovery level
 
