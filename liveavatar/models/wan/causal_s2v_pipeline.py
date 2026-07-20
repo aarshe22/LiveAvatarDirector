@@ -1149,11 +1149,12 @@ class WanS2V:
                 print(
                     f"loading VAE to cuda for final decode of remaining clips"
                 )
-                self.kv_cache1 = None
-                # self.noise_model.cpu()
-                self.vae.model.to(self.device)
-                torch.cuda.synchronize()
-                torch.cuda.empty_cache()
+            self.kv_cache1 = None
+            # Final decode always consumes CUDA latents, so the VAE must be on
+            # the same device even when model offload is disabled.
+            self.vae.model.to(self.device)
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
 
             motion_latents_pp = motion_latents
             for clip_idx, clip_output_cpu in enumerate(clip_outputs):
