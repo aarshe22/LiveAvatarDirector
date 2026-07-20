@@ -8,13 +8,16 @@ import pytest
 from PIL import Image
 
 from studio.core.config import Settings
+from studio.cache.service import CacheService
 from studio.db.database import Database
 from studio.jobs.service import JobService
 from studio.history.service import HistoryService
 from studio.media.audio import clip_plan, probe, trim_audio
 from studio.media.image import normalize_portrait
 from studio.projects.service import ProjectService
+from studio.projects.archive import ProjectArchiveService
 from studio.storage.atomic import atomic_json, contained
+from studio.storage.manager import StorageManager
 from studio.workers.worker import Worker
 
 
@@ -131,3 +134,44 @@ def test_worker_renders_requested_leading_duration_with_style_reference(services
     with db.connect() as connection: output = connection.execute("SELECT relative_path,duration FROM outputs WHERE job_id=?", (job["id"],)).fetchone()
     assert output["duration"] == pytest.approx(0.5, abs=0.03)
     assert list((settings.data_root / "projects" / project["id"] / "assets" / "normalized").glob("portrait-*-style-*.png"))
+
+
+def test_storage_manager_protects_references_and_restores_untracked_files(services, tmp_path):
+    settings, db, service = services; project = service.create("Managed")
+    asset = service.add_asset(project["id"], "portrait", "face.png", io.BytesIO(b"asset"), "image/png")
+    manager = StorageManager(db, settings.data_root, settings.cache_root, settings.models_root, tmp_path / "exports")
+    with pytest.raises(ValueError, match="referenced"): manager.trash("data", asset["relative_path"])
+    loose = settings.data_root / "projects" / project["id"] / "work" / "temp" / "loose.txt"
+    loose.parent.mkdir(parents=True, exist_ok=True); loose.write_text("recover me")
+    relative = loose.relative_to(settings.data_root).as_posix(); info = manager.describe("data", relative, checksum=True)
+    assert info["sha256"] and not info["referenced"]
+    duplicate = manager.duplicate("data", relative); assert (settings.data_root / duplicate["path"]).read_text() == "recover me"
+    moved = manager.move("data", duplicate["path"], str(Path(duplicate["path"]).with_name("renamed.txt")))
+    assert moved["name"] == "renamed.txt"
+    trashed = manager.trash("data", relative); assert not loose.exists()
+    manager.restore(trashed["id"]); assert loose.read_text() == "recover me"
+    disposable = loose.with_name("disposable.txt"); disposable.write_text("delete me")
+    purged = manager.trash("data", disposable.relative_to(settings.data_root).as_posix()); manager.purge(purged["id"])
+    assert purged["id"] not in {item["id"] for item in manager.trash_list()}
+
+
+def test_cache_cleanup_is_recoverable_and_active_safe(services):
+    settings, db, service = services; project = service.create("Cache owner")
+    cache = settings.data_root / "projects" / project["id"] / "work" / "cache"; (cache / "entry.bin").write_bytes(b"cache")
+    caches = CacheService(db, settings.data_root, settings.cache_root); key = f"project:{project['id']}:work/cache"
+    cleaned = caches.clean(key); assert cleaned["cleaned"] and not (cache / "entry.bin").exists()
+    caches.restore(cleaned["trash_id"]); assert (cache / "entry.bin").read_bytes() == b"cache"
+    with db.connect() as connection: connection.execute("UPDATE projects SET active_job_id='busy' WHERE id=?", (project["id"],))
+    with pytest.raises(ValueError, match="active job"): caches.clean(key)
+
+
+def test_project_archive_round_trip(services, tmp_path):
+    settings, db, service = services; project = service.create("Portable")
+    service.add_asset(project["id"], "portrait", "face.png", io.BytesIO(b"portable"), "image/png")
+    archive = ProjectArchiveService(db, settings.data_root).export(project["id"])
+    imported_root = tmp_path / "restored"; imported_settings = Settings(imported_root, imported_root / "models", imported_root / "cache", imported_root / "database" / "db.sqlite")
+    imported_settings.ensure(); imported_db = Database(imported_settings.database_path); imported_db.migrate()
+    with archive.open("rb") as stream: result = ProjectArchiveService(imported_db, imported_root).import_stream(stream)
+    restored = ProjectService(imported_db, imported_root).get(result["project_id"])
+    assert restored["name"] == "Portable"
+    assert (imported_root / ProjectService(imported_db, imported_root).assets(restored["id"])[0]["relative_path"]).read_bytes() == b"portable"

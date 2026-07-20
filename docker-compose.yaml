@@ -47,6 +47,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "assert b'studio.workers.worker' in open('/proc/1/cmdline','rb').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
   legacy-gradio:
     profiles: ["legacy"]
     build:

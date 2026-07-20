@@ -141,6 +141,8 @@ Exit criteria:
 
 ## Phase 8 — File and Cache Management
 
+Status: implemented in the Studio foundation.
+
 Implement:
 
 - file browser,

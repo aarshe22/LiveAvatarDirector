@@ -1037,6 +1037,10 @@ Implemented and exercised on the host GPU deployment:
 - deterministic LiveAvatar controls with documented seeded defaults and reset support,
 - editable target duration with durable leading-audio trim for short test renders,
 - measured diffusion and VAE-decode clip meters with stage-specific ETA reporting,
+- Phase 8 storage management: scoped browsing, previews/downloads, checksums, reference and active-job protection,
+- recoverable trash/restore, confirmed permanent deletion, unreferenced move/rename, and duplication,
+- portable project ZIP archive/export/import with path, size, collision, and active-job validation,
+- cache inventory, file counts, last-use reporting, recoverable safe cleanup, restore, and persisted size policy,
 - validated long-form LiveAvatar render at 704x384 and 25 FPS.
 
-The next foundation work is Phase 8 file and cache management. The current screens are read-only inventories; safe file actions, reference protection, cache cleanup, archive/export/import, and restore remain unimplemented. Incremental renderer-state recovery remains Level 0 because upstream LiveAvatar still performs monolithic generation and final decode.
+The next product phase is Phase 9 performance presets and vocal gating. Cache relocation still requires changing the host mount and restarting Compose; the UI manages inventory, cleanup, recovery, and policy but cannot safely remount host storage. Incremental renderer-state recovery remains Level 0 because upstream LiveAvatar still performs monolithic generation and final decode.

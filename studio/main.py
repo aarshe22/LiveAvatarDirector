@@ -18,15 +18,20 @@ from studio.core.config import Settings
 from studio.db.database import Database, row_dict
 from studio.jobs.service import JobService
 from studio.history.service import HistoryService
+from studio.cache.service import CacheService
+from studio.projects.archive import ProjectArchiveService
 from studio.projects.service import ProjectService
 from studio.renderers import registry
 from studio.storage.atomic import contained
 from studio.storage.atomic import atomic_json
+from studio.storage.manager import StorageManager
 from studio.media.audio import clip_plan, probe
 from studio.media.image import normalize_portrait
 
 settings = Settings.load(); db = Database(settings.database_path); projects = ProjectService(db, settings.data_root); jobs = JobService(db)
 exports_root = Path(os.getenv("LAD_EXPORTS_ROOT", "/exports")).resolve(); history = HistoryService(db, settings.data_root, exports_root)
+storage = StorageManager(db, settings.data_root, settings.cache_root, settings.models_root, exports_root)
+archives = ProjectArchiveService(db, settings.data_root); cache_service = CacheService(db, settings.data_root, settings.cache_root)
 
 
 @asynccontextmanager
@@ -49,8 +54,20 @@ class ProjectPatch(BaseModel):
     negative_prompt: str | None = None; performance_preset: str | None = None; renderer_settings: dict | None = None
 
 
+class FileAction(BaseModel):
+    scope: str = "data"; path: str; confirm: bool = False
+
+
+class FileMove(FileAction):
+    destination: str
+
+
+class CacheAction(BaseModel):
+    key: str | None = None; confirm: bool = False
+
+
 def fail(error: Exception):
-    if isinstance(error, KeyError): raise HTTPException(404, "resource not found")
+    if isinstance(error, (KeyError, FileNotFoundError)): raise HTTPException(404, "resource not found")
     raise HTTPException(400, str(error))
 
 
@@ -80,6 +97,12 @@ def list_projects(): return projects.list()
 @app.post("/api/projects", status_code=201)
 def create_project(value: ProjectCreate):
     try: return projects.create(value.name, value.mode, value.renderer)
+    except Exception as error: fail(error)
+
+
+@app.post("/api/projects/import", status_code=201)
+def import_project(file: UploadFile = File(...)):
+    try: return archives.import_stream(file.file)
     except Exception as error: fail(error)
 
 
@@ -185,6 +208,15 @@ def project_renders(project_id: str):
     return [row_dict(r) for r in rows]
 
 
+@app.post("/api/projects/{project_id}/archive")
+def archive_project(project_id: str):
+    try:
+        target = archives.export(project_id)
+        return {"project_id": project_id, "path": str(target.relative_to(settings.data_root)),
+                "size": target.stat().st_size, "download_url": f"/api/files/download?scope=data&path={target.relative_to(settings.data_root)}"}
+    except Exception as error: fail(error)
+
+
 @app.get("/api/jobs")
 def list_jobs(): return jobs.list()
 
@@ -224,33 +256,93 @@ def retry_job(job_id: str):
 
 
 @app.get("/api/files")
-def files(project_id: str | None = None):
-    root = settings.data_root / "projects" / project_id if project_id else settings.data_root
-    try: root = contained(settings.data_root, root)
-    except ValueError as error: fail(error)
-    output = []
-    if root.exists():
-        for path in root.rglob("*"):
-            if path.is_file() and not path.name.endswith(("-wal", "-shm")):
-                stat = path.stat(); output.append({"path": str(path.relative_to(settings.data_root)), "size": stat.st_size, "modified": stat.st_mtime})
-    return output[:5000]
+def files(project_id: str | None = None, scope: str = "data"):
+    try: return storage.list(scope, project_id)
+    except Exception as error: fail(error)
 
 
 @app.get("/api/files/download")
-def download(path: str):
-    try: target = contained(settings.data_root, settings.data_root / path)
+def download(path: str, scope: str = "data"):
+    try: target = storage.resolve(scope, path)
     except ValueError as error: fail(error)
     if not target.is_file(): raise HTTPException(404, "file not found")
-    return FileResponse(target)
+    return FileResponse(target, filename=target.name)
+
+
+@app.get("/api/files/preview")
+def preview(path: str, scope: str = "data"):
+    try:
+        item = storage.describe(scope, path); target = storage.resolve(scope, path)
+        if not item["previewable"]: raise ValueError("file type cannot be previewed")
+        return FileResponse(target, media_type=item["mime_type"])
+    except Exception as error: fail(error)
+
+
+@app.get("/api/files/info")
+def file_info(path: str, scope: str = "data", checksum: bool = False):
+    try: return storage.describe(scope, path, checksum)
+    except Exception as error: fail(error)
+
+
+@app.post("/api/files/trash")
+def trash_file(value: FileAction):
+    if not value.confirm: raise HTTPException(409, "trash requires confirm=true")
+    try: return storage.trash(value.scope, value.path)
+    except Exception as error: fail(error)
+
+
+@app.post("/api/files/duplicate")
+def duplicate_file(value: FileAction):
+    try: return storage.duplicate(value.scope, value.path)
+    except Exception as error: fail(error)
+
+
+@app.post("/api/files/move")
+def move_file(value: FileMove):
+    if not value.confirm: raise HTTPException(409, "move requires confirm=true")
+    try: return storage.move(value.scope, value.path, value.destination)
+    except Exception as error: fail(error)
+
+
+@app.get("/api/trash")
+def trash_list(): return {"files": storage.trash_list(), "caches": cache_service.trash_list()}
+
+
+@app.post("/api/trash/files/{trash_id}/restore")
+def restore_file(trash_id: str):
+    try: return storage.restore(trash_id)
+    except Exception as error: fail(error)
+
+
+@app.post("/api/trash/files/{trash_id}/purge")
+def purge_file(trash_id: str, confirm: bool = False):
+    if not confirm: raise HTTPException(409, "permanent deletion requires confirm=true")
+    try: return storage.purge(trash_id)
+    except Exception as error: fail(error)
+
+
+@app.post("/api/trash/caches/{trash_id}/restore")
+def restore_cache(trash_id: str):
+    try: return cache_service.restore(trash_id)
+    except Exception as error: fail(error)
+
+
+@app.post("/api/trash/caches/{trash_id}/purge")
+def purge_cache(trash_id: str, confirm: bool = False):
+    if not confirm: raise HTTPException(409, "permanent deletion requires confirm=true")
+    try: return cache_service.purge(trash_id)
+    except Exception as error: fail(error)
 
 
 @app.get("/api/caches")
-def caches():
-    result = []
-    for directory in [settings.cache_root, settings.data_root / "projects"]:
-        size = sum(path.stat().st_size for path in directory.rglob("*") if path.is_file()) if directory.exists() else 0
-        result.append({"path": str(directory), "size": size, "exists": directory.exists(), "managed": True})
-    return result
+def caches(): return cache_service.list()
+
+
+@app.post("/api/caches/clean")
+def clean_cache(value: CacheAction):
+    if not value.confirm: raise HTTPException(409, "cache cleanup requires confirm=true")
+    try: return cache_service.clean(value.key) if value.key else cache_service.clean_safe()
+    except Exception as error: fail(error)
 
 
 @app.get("/api/settings")
@@ -259,7 +351,7 @@ def get_settings(): return json.loads((settings.data_root / "config" / "applicat
 
 @app.patch("/api/settings")
 def patch_settings(changes: dict):
-    allowed = {"worker_poll_seconds", "stale_job_seconds", "log_level", "mock_renderer"}
+    allowed = {"worker_poll_seconds", "stale_job_seconds", "log_level", "mock_renderer", "cache_limit_bytes"}
     unknown = set(changes) - allowed
     if unknown: raise HTTPException(400, f"unsupported settings: {', '.join(sorted(unknown))}")
     path = settings.data_root / "config" / "application.json"; value = json.loads(path.read_text()); value.update(changes); atomic_json(path, value)

@@ -1,0 +1,7 @@
+.toolbar { grid-column: 1 / -1; display: flex; gap: 16px; align-items: end; justify-content: space-between; padding: 14px 16px; border: 1px solid #282d3b; border-radius: 12px; background: #11151e; }
+.toolbar label { min-width: 220px; }
+.file-card, .cache-card { cursor: default; }
+.path { margin-top: 10px; color: #a5b4fc; font: 11px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; }
+.file-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.file-actions button, .file-actions a, .toolbar button { padding: 7px 10px; border: 1px solid #343a4a; border-radius: 7px; background: #1a2030; color: #e5e7eb; text-decoration: none; cursor: pointer; }
+.file-actions .danger, .toolbar .danger { border-color: #7f1d1d; background: #3f151b; color: #fecaca; }
