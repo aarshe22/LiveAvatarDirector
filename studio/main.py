@@ -23,6 +23,7 @@ from studio.renderers import registry
 from studio.storage.atomic import contained
 from studio.storage.atomic import atomic_json
 from studio.media.audio import clip_plan, probe
+from studio.media.image import normalize_portrait
 
 settings = Settings.load(); db = Database(settings.database_path); projects = ProjectService(db, settings.data_root); jobs = JobService(db)
 exports_root = Path(os.getenv("LAD_EXPORTS_ROOT", "/exports")).resolve(); history = HistoryService(db, settings.data_root, exports_root)
@@ -84,7 +85,13 @@ def create_project(value: ProjectCreate):
 
 @app.get("/api/projects/{project_id}")
 def get_project(project_id: str):
-    try: return {**projects.get(project_id), "assets": projects.assets(project_id)}
+    try:
+        project = projects.get(project_id)
+        analysis_path = settings.data_root / "projects" / project_id / "analysis" / "latest.json"
+        analysis = json.loads(analysis_path.read_text()) if analysis_path.is_file() else None
+        if analysis and analysis.get("input_asset_ids") != {"portrait": project["portrait_asset_id"], "audio": project["audio_asset_id"]}:
+            analysis = None
+        return {**project, "assets": projects.assets(project_id), "analysis": analysis}
     except Exception as error: fail(error)
 
 
@@ -134,11 +141,21 @@ def upload_audio(project_id: str, file: UploadFile = File(...)):
 def analyze_project(project_id: str, frames_per_clip: int = 48):
     try:
         project = projects.get(project_id)
+        if not project["portrait_asset_id"]: raise ValueError("portrait is required")
         if not project["audio_asset_id"]: raise ValueError("audio is required")
-        asset = projects.asset(project["audio_asset_id"]); information = probe(settings.data_root / asset["relative_path"])
-        renderer = registry.get(project["renderer"]); plan = clip_plan(information["duration"], frames_per_clip, renderer.capabilities().effective_fps)
-        result = {**information, "render_plan": plan}; target = settings.data_root / "projects" / project_id / "analysis" / f"audio-{asset['sha256'][:12]}.json"
-        atomic_json(target, result); db.event("audio.analyzed", project_id, payload=result); return result
+        portrait = projects.asset(project["portrait_asset_id"]); audio = projects.asset(project["audio_asset_id"])
+        renderer = registry.get(project["renderer"]); capabilities = renderer.capabilities()
+        size_text = project["renderer_settings"].get("size", capabilities.supported_sizes[0]).replace("*", "x")
+        width, height = map(int, size_text.split("x")); mode = project["renderer_settings"].get("normalization_mode", "smart_blur")
+        preview = settings.data_root / "projects" / project_id / "assets" / "normalized" / f"portrait-{portrait['sha256'][:12]}-{width}x{height}.png"
+        portrait_info = normalize_portrait(settings.data_root / portrait["relative_path"], preview, (width, height), mode)
+        information = probe(settings.data_root / audio["relative_path"]); plan = clip_plan(information["duration"], frames_per_clip, capabilities.effective_fps)
+        result = {**information, "render_plan": plan, "portrait": portrait_info,
+                  "input_asset_ids": {"portrait": portrait["id"], "audio": audio["id"]},
+                  "preview_url": f"/api/files/download?path={preview.relative_to(settings.data_root)}"}
+        analysis_root = settings.data_root / "projects" / project_id / "analysis"
+        atomic_json(analysis_root / f"audio-{audio['sha256'][:12]}.json", result); atomic_json(analysis_root / "latest.json", result)
+        db.event("audio.analyzed", project_id, payload=result); return result
     except Exception as error: fail(error)
 
 

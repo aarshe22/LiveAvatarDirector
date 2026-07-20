@@ -1,0 +1,4 @@
+.preview-panel:empty { display: none; }
+.preview-panel { overflow: hidden; border: 1px solid #343a4a; border-radius: 12px; background: #090b10; }
+.preview-panel img { display: block; width: 100%; height: auto; }
+.analysis-state { min-height: 18px; color: #8b93a7; font-size: 13px; }

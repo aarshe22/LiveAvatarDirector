@@ -1019,3 +1019,20 @@ After each implementation phase, report:
 - startup result,
 - health result,
 - genuine remaining limitations.
+
+## 31. Current Foundation Status
+
+Implemented and exercised on the host GPU deployment:
+
+- persistent SQLite projects, assets, jobs, checkpoints, outputs, configuration, models, and caches,
+- Docker-separated API and GPU worker with startup job reconciliation,
+- LiveAvatar and mock renderer plugins,
+- universal non-distorting portrait normalization modes,
+- audio normalization, probing, automatic clip planning, and exact output validation,
+- persistent queue, retry/cancel API, renderer activity reporting, and browser reconnect,
+- project, queue, history, file inventory, and diagnostics UI sections,
+- database-backed render history plus discovery and download of untracked files in `/exports`,
+- normalized portrait preview and pre-render audio/clip analysis in the project editor,
+- validated long-form LiveAvatar render at 704x384 and 25 FPS.
+
+The next foundation work is Phase 8 file and cache management. The current screens are read-only inventories; safe file actions, reference protection, cache cleanup, archive/export/import, and restore remain unimplemented. Incremental renderer-state recovery remains Level 0 because upstream LiveAvatar still performs monolithic generation and final decode.
